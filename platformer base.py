@@ -16,7 +16,17 @@ WIDTH, HEIGHT = 1000, 800  #this is a good width/height for 2k monitors
 FPS = 60
 PLAYER_VEL = 5 #speed of character
 
+
 window = pygame.display.set_mode((WIDTH, HEIGHT)) #defining window varaible
+
+def draw_health_bar(surf, pos, size, borderC, backC, healthC, progress):
+    pygame.draw.rect(surf, backC, (*pos, *size))
+    pygame.draw.rect(surf, borderC, (*pos, *size), 1)
+    innerPos  = (pos[0]+1, pos[1]+1)
+    innerSize = ((size[0]-2) * progress, size[1]-2)
+    rect = (round(innerPos[0]), round(innerPos[1]), round(innerSize[0]), round(innerSize[1]))
+    pygame.draw.rect(surf, healthC, rect)
+
 
 #we need sprites (images) to have collision (pixel-perfect)
 def flip(sprites):
@@ -58,6 +68,7 @@ def get_block(size):
 class Player(pygame.sprite.Sprite):
     COLOR = (255, 0, 0)
     GRAVITY = 1
+    PLAYER_HEALTH = 100  # starting player health
     SPRITES = load_sprite_sheets("MainCharacters", "MaskDude", 32, 32, True) #True here will make the sprites multidirectional
     ANIMATION_DELAY = 3 #accounts for the delay between changing sprites. changing sprites is important because that is what makes it look animated
     
@@ -145,6 +156,16 @@ class Player(pygame.sprite.Sprite):
         self.animation_count += 1
         self.update()
 
+    def set_player_health(self, augment): # the augment will be a heal (positive) or a damage (negative)
+        self.PLAYER_HEALTH = self.PLAYER_HEALTH + augment
+
+    def draw_health(self, surf): #should be drawing a health bar for us
+        health_rect = pygame.Rect(0, 0, self.rect.width, 7) #this should be creating a rectangle the width of the sprite. Not sure what is needed
+        health_rect.midbottom = self.rect.centerx, self.rect.top
+        max_health = 100
+        draw_health_bar(surf, health_rect.topleft, health_rect.size,
+                        (0, 0, 0), (255, 0, 0), (0, 255, 0), self.PLAYER_HEALTH / max_health)
+
     def update(self):   #this method updates the rectangle that bounds are character based on the sprite we are showing
         self.rect = self.sprite.get_rect(topleft=(self.rect.x, self.rect.y))  #this makes sure the rect is constantly adjusted
         self.mask = pygame.mask.from_surface(self.sprite) #a mask is a mapping of all of the pixels that exist in the sprite. only part of a rectangle is filled in by the actual sprite. this map tells us where those are in the rect
@@ -226,6 +247,7 @@ def draw(window, background, bg_image, player, objects, offset_x):
 
     player.draw(window, offset_x)
 
+
     pygame.display.update()           #every frame we "clear" the screen so we dont have old drawings still on the string
 
 
@@ -275,14 +297,15 @@ def handle_move(player, objects):   #objects is involved with collision
     for obj in to_check:
         if obj and obj.name == "fire":        #if to_check is there because we could not be "colliding left or right" 
             player.make_hit()
+            player.set_player_health(-20) #adds damage to fire collisions
 
 def main(window):
     clock = pygame.time.Clock()
     background, bg_image = get_background("Blue.png")
     
     block_size = 96
-
     player = Player(100, 100, 50, 50)
+    player.draw_health(window) #should be drawing a health bar
     fire = Fire(100, HEIGHT - block_size - 64, 16, 32) #HEIGHT - block_size - 64 will put us on top of a block
     fire.on()  #can turn it off later if we want
     floor = [Block(i * block_size, HEIGHT - block_size, block_size) 
@@ -297,7 +320,8 @@ def main(window):
     run = True
     while run:
         clock.tick(FPS)
-
+        if player.PLAYER_HEALTH <= 0: #this if statement causes the game to crash if the user dies. Update to be Game Over screen instead.
+            break
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 run = False
